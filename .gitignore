@@ -12,5 +12,9 @@ store-assets/
 # generated example fixtures (recreate with `node examples/basic/gen-shots.mjs`)
 examples/basic/shots/
 
+# self-contained CLI release build + packed tarball (regenerate: pnpm --filter @shotframe/cli pack:release)
+packages/cli/release/
+packages/cli/*.tgz
+
 # internal planning (oh-my-claudecode)
 .omc/

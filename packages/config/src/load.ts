@@ -5,8 +5,10 @@
  * `.json` is parsed directly. Validation failures throw a structured `ConfigError`.
  */
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { extname, resolve as resolvePath } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
 import type {
   BackgroundConfig,
@@ -29,8 +31,48 @@ export interface ResolvedStudioConfig {
 
 const JS_LIKE = new Set(['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs']);
 
+/**
+ * Map `@shotframe/*` specifiers to this install's actual files, so a user's
+ * `shotframe.config.ts` can `import { defineConfig } from '@shotframe/config'`
+ * even in a project that hasn't installed the packages (e.g. a globally-linked
+ * CLI). We resolve siblings from here (`@shotframe/config` is already loaded),
+ * preferring `import.meta.resolve` with a `createRequire` fallback.
+ */
+function shotframeAliases(): Record<string, string> {
+  const alias: Record<string, string> = {};
+  const req = createRequire(import.meta.url);
+  for (const name of ['@shotframe/config', '@shotframe/core', '@shotframe/fonts']) {
+    try {
+      const metaResolve = (import.meta as { resolve?: (s: string) => string }).resolve;
+      alias[name] = metaResolve ? fileURLToPath(metaResolve(name)) : req.resolve(name);
+    } catch {
+      try {
+        alias[name] = req.resolve(name);
+      } catch {
+        /* not resolvable in this realm — skip below */
+      }
+    }
+  }
+  // Bundled release fallback: in the self-contained CLI tarball the `@shotframe/*`
+  // packages don't exist on disk, so the resolves above fail. We ship a tiny shim
+  // beside the bundled index.js (`./assets/config-shim.mjs`, exporting
+  // `defineConfig`) so a user's `.ts` config can still
+  // `import { defineConfig } from '@shotframe/config'`. `@shotframe/core` and
+  // `@shotframe/fonts` are type-only in configs (erased by jiti), so a missing
+  // alias for them is fine.
+  if (!alias['@shotframe/config']) {
+    try {
+      const shim = fileURLToPath(new URL('./assets/config-shim.mjs', import.meta.url));
+      if (existsSync(shim)) alias['@shotframe/config'] = shim;
+    } catch {
+      /* import.meta.url not a file URL — nothing to fall back to */
+    }
+  }
+  return alias;
+}
+
 async function readModule(absPath: string): Promise<unknown> {
-  const jiti = createJiti(pathToFileURL(absPath).href);
+  const jiti = createJiti(pathToFileURL(absPath).href, { alias: shotframeAliases() });
   const mod = (await jiti.import(absPath)) as Record<string, unknown>;
   return mod && 'default' in mod ? mod.default : mod;
 }

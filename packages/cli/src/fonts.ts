@@ -9,6 +9,7 @@
  *
  * Empty `brand.font` → default Inter (core also falls back to "'Inter', sans-serif").
  */
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -85,8 +86,17 @@ export function resolveFont(brand: Pick<BrandConfig, 'font' | 'fontFace'>): Font
 
 /** Absolute on-disk dir of the bundled woff2 files (`@shotframe/fonts/fonts`). */
 export function fontsDir(): string {
-  // Prefer `import.meta.resolve` (sync since Node 20.6). Fall back to a CJS-style
-  // require.resolve for runtimes that don't expose it (e.g. vitest's SSR realm).
+  // In the bundled release tarball the woff2 faces are shipped beside index.js at
+  // `./assets/fonts`. Prefer that when present so a clean global install works.
+  try {
+    const bundled = fileURLToPath(new URL('./assets/fonts', import.meta.url));
+    if (existsSync(bundled)) return bundled;
+  } catch {
+    /* import.meta.url not a file URL — fall through to workspace resolution */
+  }
+  // Dev / workspace: prefer `import.meta.resolve` (sync since Node 20.6). Fall back
+  // to a CJS-style require.resolve for runtimes that don't expose it (e.g. vitest's
+  // SSR realm).
   const metaResolve = (import.meta as { resolve?: (s: string) => string }).resolve;
   const pkgPath =
     typeof metaResolve === 'function'

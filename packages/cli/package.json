@@ -36,7 +36,8 @@
   "scripts": {
     "build": "tsup && node ./scripts/copy-studio.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pack:release": "node scripts/build-release.mjs && cd release && npm pack --pack-destination .. && cd .. && mv -f shotframe-cli-$npm_package_version.tgz shotframe-$npm_package_version.tgz"
   },
   "dependencies": {
     "@shotframe/config": "workspace:*",
@@ -49,6 +50,7 @@
   "devDependencies": {
     "@shotframe/studio": "workspace:*",
     "@types/node": "^22.10.5",
+    "esbuild": "^0.24.2",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

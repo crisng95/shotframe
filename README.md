@@ -52,6 +52,31 @@ npx playwright install chromium   # one-time; required by `render`
 `@shotframe/core` and `@shotframe/config` are browser-target libraries with no browser
 dependency to import; only `render` needs Chromium.
 
+### Use without npm (GitHub release tarball)
+
+shotframe is **not on the npm registry**. Install the self-contained tarball from
+[GitHub Releases](https://github.com/crisng95/shotframe/releases) — no registry, no auth
+token:
+
+```bash
+npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.0/shotframe-0.1.0.tgz
+npx playwright install chromium     # one-time, for `render`
+```
+
+The tarball bundles `@shotframe/core`/`config`/`fonts` and pulls only public deps
+(`commander`, `playwright`, `jiti`, `zod`). Then `cd` into any project and run `shotframe`.
+Your config can still `import { defineConfig } from '@shotframe/config'` even though the
+project hasn't installed it (the loader aliases it to a bundled shim); a `.json` config or a
+plain `export default {…}` works too.
+
+**From source (alternative):**
+
+```bash
+git clone https://github.com/crisng95/shotframe && cd shotframe
+pnpm install && pnpm -r build && npx playwright install chromium
+ln -sf "$PWD/packages/cli/dist/index.js" /usr/local/bin/shotframe   # a symlink on PATH
+```
+
 ## Quickstart (minimal agent recipe)
 
 1. Write `shotframe.config.ts`:

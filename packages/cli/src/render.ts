@@ -63,8 +63,17 @@ function sourceRefs(t: ResolvedTarget, bgImage?: string): string[] {
 
 /** Resolve the browser-target core artifact (`@shotframe/core` → dist/index.js). */
 function resolveCoreArtifact(): string {
-  // core is ESM-only (exports defines only the `import` condition), so use the ESM
-  // resolver which honours it. The artifact is a self-contained browser ESM bundle.
+  // In the bundled release tarball the browser core is shipped beside this file at
+  // `./assets/core.js` (it can't be inlined — it's served verbatim at /core.js).
+  try {
+    const bundled = fileURLToPath(new URL('./assets/core.js', import.meta.url));
+    if (existsSync(bundled)) return bundled;
+  } catch {
+    /* import.meta.url not a file URL — fall through to workspace resolution */
+  }
+  // Dev / workspace: core is ESM-only (exports defines only the `import` condition),
+  // so use the ESM resolver which honours it. The artifact is a self-contained
+  // browser ESM bundle.
   const url = import.meta.resolve('@shotframe/core');
   return fileURLToPath(url);
 }
