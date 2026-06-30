@@ -1,0 +1,59 @@
+{
+  "name": "@shotframe/cli",
+  "version": "0.1.0",
+  "description": "CLI for shotframe: `shotframe render` (headless batch via Playwright) and `shotframe studio` (live browser editor) — frame real screenshots into exact App Store, Google Play and Chrome Web Store assets from one config.",
+  "keywords": [
+    "screenshots",
+    "app-store",
+    "google-play",
+    "chrome-web-store",
+    "fastlane",
+    "frameit",
+    "canvas",
+    "playwright",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "ISEMI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crisng95/shotframe.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/crisng95/shotframe#readme",
+  "bugs": "https://github.com/crisng95/shotframe/issues",
+  "type": "module",
+  "bin": {
+    "shotframe": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup && node ./scripts/copy-studio.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shotframe/config": "workspace:*",
+    "@shotframe/core": "workspace:*",
+    "@shotframe/fonts": "workspace:*",
+    "commander": "^12.1.0",
+    "jiti": "^2.4.2",
+    "playwright": "^1.49.1"
+  },
+  "devDependencies": {
+    "@shotframe/studio": "workspace:*",
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

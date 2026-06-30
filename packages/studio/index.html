@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>shotframe studio</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <aside class="rail">
+    <p class="brand">shotframe <b>· studio</b></p>
+    <p class="sub" id="brandName">—</p>
+    <h3>Targets</h3>
+    <div class="targets" id="targets"></div>
+  </aside>
+
+  <div class="center">
+    <main class="stage">
+      <canvas id="c"></canvas>
+      <div class="hint" id="hint">Loading config…</div>
+    </main>
+  </div>
+
+  <aside class="settings" id="settings">
+    <h3>Font</h3>
+    <div class="row">Family
+      <select id="fontSelect"></select>
+    </div>
+    <div class="customFont" id="customFont" style="display:none">
+      <input id="customFamily" placeholder="Family name (e.g. My Font)" />
+      <input id="customUrl" placeholder="https://…/font.woff2" />
+      <button class="btn ghost" id="customApply">Apply custom font</button>
+    </div>
+
+    <h3>Caption</h3>
+    <div class="slide sel">
+      <div class="hd">Headline (in-memory only — not written to disk)</div>
+      <textarea id="capText" placeholder="Caption text…"></textarea>
+    </div>
+    <div class="toggles">
+      <label><input type="checkbox" id="capBottom" /> Caption at bottom</label>
+    </div>
+    <div class="row">Headline size
+      <input type="range" id="headSize" min="0.7" max="1.4" step="0.02" value="1" />
+    </div>
+
+    <h3>Screenshot</h3>
+    <div class="drop" id="drop">
+      Drag &amp; drop a <b>real screenshot</b> here<br />
+      <span class="hint">(or click to choose) — replaces the source image for this target</span>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden />
+    <button class="btn ghost" id="clearImg" style="display:none">Clear image</button>
+
+    <h3>Export</h3>
+    <div class="btns">
+      <button class="btn primary" id="expPng">⬇︎ Export PNG (this target)</button>
+      <button class="btn ghost" id="expJpg">⬇︎ Export JPEG (this target)</button>
+      <button class="btn ghost" id="expAll">⬇︎ Export ALL targets</button>
+    </div>
+  </aside>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

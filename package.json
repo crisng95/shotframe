@@ -1,0 +1,22 @@
+{
+  "name": "shotframe-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Wrap real screenshots in device frames, gradient backgrounds and captions, then export exact store sizes for App Store, Google Play and Chrome Web Store from one shared config.",
+  "license": "MIT",
+  "author": "ISEMI",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm -r build && changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.11",
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@11.8.0"
+}

@@ -1,0 +1,53 @@
+{
+  "name": "@shotframe/core",
+  "version": "0.1.0",
+  "description": "Brand-free canvas engine for shotframe: a sync, pure renderTarget compose function plus a stable primitive toolkit.",
+  "keywords": [
+    "canvas",
+    "screenshots",
+    "app-store",
+    "google-play",
+    "chrome-web-store",
+    "shotframe"
+  ],
+  "license": "MIT",
+  "author": "ISEMI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crisng95/shotframe.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/crisng95/shotframe#readme",
+  "bugs": "https://github.com/crisng95/shotframe/issues",
+  "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

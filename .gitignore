@@ -1,0 +1,16 @@
+node_modules
+dist
+.DS_Store
+*.tsbuildinfo
+.turbo
+coverage
+
+# generated render output (example quickstart + CLI defaults)
+out/
+shotframe-out/
+store-assets/
+# generated example fixtures (recreate with `node examples/basic/gen-shots.mjs`)
+examples/basic/shots/
+
+# internal planning (oh-my-claudecode)
+.omc/

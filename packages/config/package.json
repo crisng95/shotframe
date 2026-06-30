@@ -1,0 +1,57 @@
+{
+  "name": "@shotframe/config",
+  "version": "0.1.0",
+  "description": "Zod schema, defineConfig helper, jiti-based config loader and built-in store-target packs for shotframe.",
+  "keywords": [
+    "shotframe",
+    "config",
+    "zod",
+    "schema"
+  ],
+  "license": "MIT",
+  "author": "ISEMI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crisng95/shotframe.git",
+    "directory": "packages/config"
+  },
+  "homepage": "https://github.com/crisng95/shotframe#readme",
+  "bugs": "https://github.com/crisng95/shotframe/issues",
+  "type": "module",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shotframe/core": "workspace:*",
+    "jiti": "^2.4.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}
