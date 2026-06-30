@@ -23,14 +23,21 @@ screenshot).
 ## Operating contract
 
 ```
-INPUT   a shotframe.config.ts | .js | .json  (schema below)
+INPUT   a shotframe.config.{ts,js,mjs,json}  (schema below) in the project root,
         + the real screenshot images it references (source: paths)
-RUN     npx shotframe render --config <path> --out <dir>
-OUTPUT  <dir>/<store>/<target.id>.<png|jpeg>   — one file per target,
+RUN     cd <project> && npx shotframe          # gen ALL targets (config auto-detected)
+        npx shotframe -t <id> [<id>...]        # regenerate only these variants
+        npx shotframe -s <store>               # regenerate only one store
+        npx shotframe list                     # show every target id + size
+        npx shotframe studio                   # live editor (human; long-lived server)
+OUTPUT  <out>/<store>/<target.id>.<png|jpeg>   — one file per target,
         each at the target's exact pixel size (verifiable with `sips`/`sharp`)
 EXIT    0 on success; non-zero on error with a one-line reason on stderr
 DETERMINISM  same config + same images → same output bytes on macOS/Linux/Windows
 ```
+
+`render` is the **default** command, so bare `shotframe` (no subcommand) generates
+everything. `--out` is CWD-relative and overrides the config's `output.dir`.
 
 A **target** = one output image. A store needing N screenshots = N targets with the
 same `store`. Nothing is interactive; everything is declared in the config.
@@ -72,27 +79,35 @@ export default defineConfig({
 });
 ```
 
-2. Render:
+2. Generate (config auto-detected from cwd):
 
 ```bash
-npx shotframe render --config ./shotframe.config.ts --out ./store-assets
-# → ./store-assets/appstore/iphone69-1.jpg   (1290×2796)
-# → ./store-assets/chrome/screenshot-1.png   (1280×800)
+cd my-project
+npx shotframe                       # → ./store-assets/<store>/<id>.<ext> for every target
+npx shotframe -t iphone69-1         # regenerate just one variant
+npx shotframe -s chrome             # regenerate just one store
+npx shotframe list                  # what target ids exist?
 ```
 
 ## Commands
 
-### `shotframe render` — headless batch export (the primary agent entrypoint)
+### `shotframe` (= `shotframe render`) — generate assets (default, primary entrypoint)
+
+Bare `shotframe` renders **all** targets. It is the default command, so no subcommand
+is needed. Runs every target through a Playwright-driven offscreen canvas and writes
+`<out>/<store>/<id>.<ext>`. Loads the bundled `brand.font` before rendering so text wraps
+identically everywhere. Completes and exits (no lingering process).
 
 | Flag | Meaning |
 | --- | --- |
 | `-c, --config <path>` | Config file. Default: auto-detect `shotframe.config.{ts,js,mjs,json}` in cwd. |
-| `-o, --out <dir>` | Output dir. **CWD-relative.** Overrides `output.dir` (which is config-relative). |
+| `-o, --out <dir>` | Output dir. **CWD-relative.** Overrides `output.dir` (config-relative). |
 | `-s, --store <appstore\|play\|chrome\|email>` | Render only one store. |
+| `-t, --target <ids...>` | Render only these target ids (regenerate specific variants). |
 
-Runs every target through a Playwright-driven offscreen canvas and writes
-`<out>/<store>/<id>.<ext>`. Loads the bundled `brand.font` before rendering so text
-wraps identically everywhere. Completes and exits (no lingering process).
+### `shotframe list` — discover target ids
+
+Prints every target id + size, grouped by store, so you know what to pass to `-t`.
 
 ### `shotframe studio` — live browser editor (human/preview, not for headless agents)
 

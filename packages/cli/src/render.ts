@@ -15,6 +15,17 @@ export interface RenderOptions {
   config: string;
   out?: string;
   store?: string;
+  /** Only render these target ids (regenerate specific variants). */
+  targets?: string[];
+}
+
+/** Load a config and return its resolved targets (for `shotframe list`). */
+export async function listTargets(
+  configPath: string,
+): Promise<{ store: string; id: string; w: number; h: number }[]> {
+  const abs = resolve(process.cwd(), configPath);
+  const cfg: ResolvedStudioConfig = await loadConfig(abs);
+  return cfg.targets.map((t) => ({ store: t.store, id: t.id, w: t.size.w, h: t.size.h }));
 }
 
 const MIME: Record<string, string> = {
@@ -70,6 +81,13 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
   if (opts.store) {
     targets = targets.filter((t) => t.store === opts.store);
     if (targets.length === 0) throw new Error(`No targets for store "${opts.store}"`);
+  }
+  if (opts.targets && opts.targets.length > 0) {
+    const want = new Set(opts.targets);
+    targets = targets.filter((t) => want.has(t.id));
+    const missing = opts.targets.filter((id) => !cfg.targets.some((t) => t.id === id));
+    if (missing.length) throw new Error(`Unknown target id(s): ${missing.join(', ')}`);
+    if (targets.length === 0) throw new Error('No matching targets');
   }
 
   // An explicit --out is CWD-relative (what the user typed); config output.dir is
