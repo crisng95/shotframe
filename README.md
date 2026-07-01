@@ -60,7 +60,7 @@ shotframe is **not on the npm registry**. Install the self-contained tarball fro
 token:
 
 ```bash
-npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.1/shotframe-0.1.1.tgz
+npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.2/shotframe-0.1.2.tgz
 npx playwright install chromium     # one-time, for `render`
 ```
 

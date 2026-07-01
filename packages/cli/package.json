@@ -1,6 +1,6 @@
 {
   "name": "@shotframe/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI for shotframe: `shotframe render` (headless batch via Playwright) and `shotframe studio` (live browser editor) — frame real screenshots into exact App Store, Google Play and Chrome Web Store assets from one config.",
   "keywords": [
     "screenshots",

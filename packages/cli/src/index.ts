@@ -15,7 +15,9 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 function requireConfig(opt?: string): string {
   const config = opt ?? detectConfig(process.cwd());
   if (!config) {
-    console.error('✖ No config found. Pass --config or add shotframe.config.ts to this folder.');
+    console.error('✖ No shotframe config in this folder.');
+    console.error('  → Run `shotframe init` to scaffold one (config + a sample screenshot),');
+    console.error('    or pass --config <path> to point at an existing config.');
     process.exit(1);
   }
   return config;
