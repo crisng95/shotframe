@@ -117,11 +117,18 @@ npx shotframe list                  # what target ids exist?
 
 ## Commands
 
-### `shotframe init` — scaffold a starter project
+### `shotframe init` — scaffold a starter project (+ an agent skill)
 
-Writes a `shotframe.config.ts` (or `--json`) plus a placeholder `shots/sample.png`, so
-`shotframe` renders something immediately. Replace the sample with your real screenshots
-and edit the config. `--force` overwrites; refuses to clobber an existing config otherwise.
+Writes `shotframe.config.ts` (or `--json`), a placeholder `shots/sample.png`, **and an AI
+agent skill at `.claude/skills/shotframe/SKILL.md`**. So the moment shotframe is installed
+in a project, any Claude Code (or compatible) agent there discovers a `shotframe` skill and
+can generate store screenshots by redrawing the app's screens — the user can just say
+"generate store screenshots". `--no-skill` skips the skill; `--force` overwrites.
+
+### `shotframe skill` — (re)write just the agent skill
+
+Drops `.claude/skills/shotframe/SKILL.md` into an existing project without touching the
+config. Use it to add the agent capability to a project that already has a config.
 
 ### `shotframe` (= `shotframe render`) — generate assets (default, primary entrypoint)
 
@@ -255,6 +262,10 @@ The playbook is [`AGENTS.md`](./AGENTS.md); the canonical worked example is
 [`examples/basic/presets/appdemo.ts`](./examples/basic/presets/appdemo.ts) (a full app home
 screen drawn entirely with `api.ui`). Point your agent at `AGENTS.md` and it produces
 `presets/*.ts` + a config, then runs `shotframe`.
+
+**It's automatic in-project:** `shotframe init` (or `shotframe skill`) drops the same
+playbook as a Claude Code skill at `.claude/skills/shotframe/SKILL.md`, so an agent in that
+repo picks it up with no prompting — the user just asks for store screenshots.
 
 ## Fonts
 

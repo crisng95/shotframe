@@ -5,6 +5,7 @@ import { detectConfig } from './detect.js';
 import { runRender, listTargets } from './render.js';
 import { runStudio } from './studio.js';
 import { runInit } from './init.js';
+import { runSkill } from './skill.js';
 
 // Read the real version from package.json (one level up from dist/). Works in dev and
 // when published (npm always ships package.json), so `--version` never drifts.
@@ -61,21 +62,44 @@ program
 // immediately after install (the "cd in, one command" onboarding path).
 program
   .command('init')
-  .description('Scaffold shotframe.config + a sample screenshot in this folder')
+  .description('Scaffold shotframe.config + sample + an AI-agent skill in this folder')
   .option('--json', 'write shotframe.config.json instead of .ts')
+  .option('--no-skill', 'do not write the .claude/skills/shotframe agent skill')
   .option('-f, --force', 'overwrite existing files')
-  .action(async (opts: { json?: boolean; force?: boolean }) => {
+  .action(async (opts: { json?: boolean; skill?: boolean; force?: boolean }) => {
+    const rel = (p: string) => relative(process.cwd(), p) || p;
     try {
       const { config, sample } = await runInit({ json: opts.json, force: opts.force });
-      const rel = (p: string) => relative(process.cwd(), p) || p;
       console.log(`✓ Created ${rel(config)}`);
       console.log(`✓ Created ${rel(sample)} (a placeholder — replace with your real screenshots)`);
+      if (opts.skill !== false) {
+        const { skill } = await runSkill({ force: opts.force });
+        console.log(`✓ Created ${rel(skill)} (an AI agent can now generate screens for you)`);
+      }
       console.log('\nNext:');
-      console.log('  1. shotframe            # render now (uses the sample)');
-      console.log('  2. drop real screenshots into ./shots/ and edit the config');
-      console.log('  3. shotframe studio     # tweak captions/fonts visually');
+      console.log('  • shotframe                        # render now (uses the sample)');
+      console.log('  • drop real screenshots into ./shots/, or ask your coding agent to');
+      console.log('    "generate store screenshots" — it will use the shotframe skill');
+      console.log('  • shotframe studio                 # tweak captions/fonts visually');
     } catch (err) {
       console.error(`✖ init failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  });
+
+// `skill` — (re)write just the AI-agent skill into an existing project.
+program
+  .command('skill')
+  .description('Write the AI-agent skill (.claude/skills/shotframe/SKILL.md) into this folder')
+  .option('-f, --force', 'overwrite an existing skill')
+  .action(async (opts: { force?: boolean }) => {
+    try {
+      const { skill } = await runSkill({ force: opts.force });
+      console.log(`✓ Created ${relative(process.cwd(), skill) || skill}`);
+      console.log('  A Claude Code (or compatible) agent will discover it and can generate');
+      console.log('  store screenshots by redrawing this project’s screens.');
+    } catch (err) {
+      console.error(`✖ skill failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
   });
