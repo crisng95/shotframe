@@ -24,6 +24,17 @@ export const DEFAULT_FONT_STACK =
  */
 export const DEFAULT_FAMILY = "'Inter', sans-serif";
 
+/**
+ * Reference phone aspect ratio (screen width / height). Used to derive the
+ * phone-scale unit `S = min(w, h * PHONE_ASPECT)` handed to presets. Semantics:
+ * `S` is "how wide a phone of this height would be". For phone targets (aspect
+ * below this threshold) `S === w`, so type/radii are unchanged; for wider tablet
+ * / iPad targets `S < w`, which bounds type and round shapes while positions and
+ * containers keep using `w`/`h` to fill the frame edge-to-edge (no center column).
+ * A structural layout constant, not a brand value.
+ */
+export const PHONE_ASPECT = 0.58;
+
 function corners(r: Radius, w: number, h: number): Corners {
   if (typeof r === 'number') {
     const rad = Math.min(r, w / 2, h / 2);

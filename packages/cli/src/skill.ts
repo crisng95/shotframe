@@ -42,7 +42,7 @@ user to install it — see the repo README).
 3. **Redraw each screen as a preset.** For each chosen screen write \`presets/<name>.ts\`:
    \`\`\`ts
    import type { PresetDrawFn } from '@shotframe/core';
-   const screen: PresetDrawFn = (ctx, { w, h, brand, tokens, prim, font, ui }) => { /* draw */ };
+   const screen: PresetDrawFn = (ctx, { w, h, S, brand, tokens, prim, font, ui }) => { /* draw */ };
    export default screen;
    \`\`\`
    Reconstruct the real screen (same nav bar / list / cards / hero, real-ish labels, brand
@@ -57,7 +57,7 @@ user to install it — see the repo README).
    right. \`shotframe -t <id>\` re-renders one; \`shotframe list\` shows targets.
 
 ## \`api\` a preset receives
-\`(ctx, { w, h, brand, tokens, prim, font, ui })\` — \`tokens\` = brand.colors by name;
+\`(ctx, { w, h, S, aspect, isWide, brand, tokens, prim, font, ui })\` — \`tokens\` = brand.colors by name;
 \`prim\` = low-level (rr rb rs F tx wrap wrapLines pill sbar scrBg fig withAlpha);
 \`font\` = resolved family (pass to every text component); \`ui\` = high-level components (prefer these):
 
@@ -79,6 +79,14 @@ iconGlyph(g,cx,cy,r,name,color)   name in chevron|plus|check|search|heart|star|b
 \`\`\`
 Store sizes: App Store 1290×2796 (iPhone), 2064×2752 (iPad); Play 1080×1920 (phone),
 1600×2560 (tablet), 1024×500 (feature graphic); Chrome 1280×800. A target per screen per store.
+
+## Filling wide targets (tablet / iPad)
+The same preset draws a phone AND a tablet/iPad. To avoid ballooning OR a squeezed center
+column, **size type/radii/strokes/circles by \`S\`** (the phone-scale unit \`min(w, h*0.58)\`)
+and **position + size containers by \`w\`/\`h\`**. On phones \`S === w\` (nothing changes); on
+tablet/iPad \`S < w\`, so text/round shapes stay proportionate while cards/rails/bars still
+stretch edge-to-edge. \`aspect\` = w/h and \`isWide\` = aspect > 0.58 (true on tablet/iPad) are
+there if you need to branch. Phone-only set? Ignore \`S\` and just use \`w\`/\`h\`.
 
 ## Good store screens
 Show the payoff (not navigation); one idea per screen echoed by the caption; use the app's

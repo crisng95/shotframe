@@ -468,6 +468,17 @@ export interface UiKit {
 export interface PresetDrawApi {
   w: number;
   h: number;
+  /**
+   * Phone-scale unit = `min(w, h * PHONE_ASPECT)`. Bound type / radii / strokes /
+   * circle sizes by this so wide (tablet/iPad) targets don't balloon; keep positions
+   * and container widths on `w`/`h` so they still fill the frame edge-to-edge.
+   * On phone targets `S === w` (unchanged).
+   */
+  S: number;
+  /** Screen aspect ratio `w / h`. */
+  aspect: number;
+  /** True when the target is wider than a phone (`aspect > PHONE_ASPECT`) — i.e. tablet/iPad. */
+  isWide: boolean;
   brand: BrandConfig;
   /** Remap of brand color tokens, available by name. */
   tokens: Record<string, string>;
