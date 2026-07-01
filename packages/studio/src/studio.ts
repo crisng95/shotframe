@@ -1,22 +1,28 @@
 /**
  * The browser studio. A config CONSUMER: it boots from a resolved config served
- * at `/config.json`, renders the selected target into a `<canvas>` with the SAME
- * `@shotframe/core` `renderTarget` the CLI/headless renderer uses, and lets the
- * user tweak caption text/position/size and swap in a real screenshot — all
- * in-memory (v1 never writes back to the config file).
+ * at `/config.json`, renders the selected target as REAL DOM with the SAME
+ * `@shotframe/core.renderAsset` the CLI uses, and lets the user tweak caption
+ * text/position/size and swap in a real screenshot — all in-memory (v1 never
+ * writes back to the config file).
+ *
+ * WYSIWYG: the preview IS the asset DOM. Export rasterizes that exact DOM with
+ * html-to-image — i.e. download = a reflow of what is on screen. (Byte-identical
+ * parity with `shotframe render`, which uses Playwright, is a documented
+ * follow-up via a CLI `/render` endpoint.)
  */
-import { renderTarget } from '@shotframe/core';
+import { renderAsset } from '@shotframe/core';
 import type {
   BackgroundConfig,
   BrandConfig,
   CaptionConfig,
   PresetDef,
-  PresetDrawFn,
+  HtmlPresetFn,
   ResolvedTarget,
-  SourceImageMap,
+  SourceUrlMap,
   StudioConfig,
 } from '@shotframe/core';
-import { groupTargetsByStore, sourceRefs, targetKey } from './group.js';
+import { toBlob } from 'html-to-image';
+import { groupTargetsByStore, targetKey } from './group.js';
 import {
   CUSTOM_VALUE,
   facesForFamily,
@@ -27,11 +33,6 @@ import {
   type ManifestFont,
 } from './fonts.js';
 
-/**
- * The boot payload the CLI `studio` command serves at `/config.json`.
- * `config` is the resolved studio config; `sources` maps each image ref used by
- * a target to a URL the studio can `fetch` (the CLI serves these under /sources/*).
- */
 export interface StudioBootData {
   config: {
     brand: BrandConfig;
@@ -41,12 +42,8 @@ export interface StudioBootData {
     output?: { dir: string; format?: 'png' | 'jpeg'; quality?: number };
   };
   sources: Record<string, string>;
-  /** Serialized Path B `PresetDrawFn` sources, keyed by preset id (CLI-provided). */
+  /** Serialized Path B `HtmlPresetFn` sources, keyed by preset id (CLI-provided). */
   presetFns?: Record<string, string>;
-  /**
-   * The resolved brand font: faces to LOAD before the first render so the
-   * studio's measure/wrap matches the headless renderer (deterministic font).
-   */
   fonts?: {
     family: string;
     faces: { family: string; url: string; weight: string; style: string }[];
@@ -58,14 +55,14 @@ interface TargetState {
   captionText: string;
   captionBottom: boolean;
   headMul: number;
-  /** A user-supplied screenshot that overrides the config `source`. */
-  userImage?: ImageBitmap;
+  /** A user-supplied screenshot (object URL) that overrides the config `source`. */
+  userImageUrl?: string;
 }
 
 interface Els {
   brandName: HTMLElement;
   targets: HTMLElement;
-  canvas: HTMLCanvasElement;
+  stage: HTMLElement;
   hint: HTMLElement;
   capText: HTMLTextAreaElement;
   capBottom: HTMLInputElement;
@@ -94,26 +91,22 @@ export class Studio {
   private readonly els: Els;
   private readonly targets: ResolvedTarget[];
   private readonly state = new Map<string, TargetState>();
-  private readonly bitmapCache = new Map<string, Promise<ImageBitmap>>();
   /** Path B presets reconstructed from their serialized sources (shell-injected). */
-  private readonly presets: Record<string, PresetDrawFn> = {};
-  /** Bundled fonts from `/fonts/manifest.json` (empty until the picker loads). */
+  private readonly presets: Record<string, HtmlPresetFn> = {};
   private manifest: ManifestFont[] = [];
-  /** Already-registered FontFaces, keyed family|weight|style|url, to avoid dupes. */
   private readonly loadedFaces = new Set<string>();
   private selected = 0;
-  private renderToken = 0;
 
   constructor(boot: StudioBootData) {
     this.boot = boot;
     this.targets = boot.config.targets;
     for (const [id, src] of Object.entries(boot.presetFns ?? {})) {
-      this.presets[id] = new Function(`return (${src});`)() as PresetDrawFn;
+      this.presets[id] = new Function(`return (${src});`)() as HtmlPresetFn;
     }
     this.els = {
       brandName: el('brandName'),
       targets: el('targets'),
-      canvas: el<HTMLCanvasElement>('c'),
+      stage: el('c'),
       hint: el('hint'),
       capText: el<HTMLTextAreaElement>('capText'),
       capBottom: el<HTMLInputElement>('capBottom'),
@@ -139,7 +132,7 @@ export class Studio {
     }
   }
 
-  /** Build the canvas-engine config (brand + global background) once. */
+  /** Build the engine config (brand + global background) once. */
   private cfg(): StudioConfig {
     return {
       brand: this.boot.config.brand,
@@ -157,33 +150,10 @@ export class Studio {
     return this.state.get(targetKey(this.current()))!;
   }
 
-  /** Resolve & cache an image ref → ImageBitmap via the CLI-served URL. */
-  private loadRef(ref: string): Promise<ImageBitmap> | undefined {
-    const url = this.boot.sources[ref];
-    if (!url) return undefined;
-    let p = this.bitmapCache.get(url);
-    if (!p) {
-      p = fetch(url)
-        .then((r) => r.blob())
-        .then((b) => createImageBitmap(b));
-      this.bitmapCache.set(url, p);
-    }
-    return p;
-  }
-
-  /** Decode every source a target needs (+ the in-memory user override). */
-  private async buildSources(t: ResolvedTarget, st: TargetState): Promise<SourceImageMap> {
-    const sources: SourceImageMap = {};
-    await Promise.all(
-      sourceRefs(t, this.boot.config.background.image).map(async (ref) => {
-        const p = this.loadRef(ref);
-        if (p) sources[ref] = await p;
-      }),
-    );
-    if (st.userImage) {
-      // renderTarget resolves `target.source` first, then falls back to `target.id`.
-      sources[t.source ?? t.id] = st.userImage;
-    }
+  /** ref→URL sources for a target, plus the in-memory user-image override. */
+  private sourcesFor(t: ResolvedTarget, st: TargetState): SourceUrlMap {
+    const sources: SourceUrlMap = { ...this.boot.sources };
+    if (st.userImageUrl) sources[t.source ?? t.id] = st.userImageUrl;
     return sources;
   }
 
@@ -204,23 +174,30 @@ export class Studio {
     return out;
   }
 
-  /** Render the given target into a fresh, dimension-exact offscreen canvas. */
-  private async renderTo(canvas: HTMLCanvasElement, t: ResolvedTarget): Promise<void> {
+  /** Build the asset HTML for a target (with its edits applied). */
+  private assetHtml(t: ResolvedTarget): string {
     const st = this.state.get(targetKey(t))!;
-    const sources = await this.buildSources(t, st);
-    canvas.width = t.size.w;
-    canvas.height = t.size.h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('no 2d context');
-    renderTarget(ctx, this.cfg(), this.editedTarget(t, st), sources, this.presets);
+    return renderAsset(this.cfg(), this.editedTarget(t, st), {
+      presets: this.presets,
+      sources: this.sourcesFor(t, st),
+      family: this.boot.config.brand.font,
+    });
   }
 
-  /** Re-render the visible canvas for the current selection. */
-  private async draw(): Promise<void> {
-    const token = ++this.renderToken;
+  /** Mount + scale the current target into the stage. */
+  private draw(): void {
     const t = this.current();
-    await this.renderTo(this.els.canvas, t);
-    if (token !== this.renderToken) return; // a newer render superseded us
+    this.els.stage.innerHTML = this.assetHtml(t);
+    const asset = this.els.stage.querySelector('#asset') as HTMLElement | null;
+    if (asset) {
+      const maxW = window.innerWidth * 0.52;
+      const maxH = window.innerHeight * 0.78;
+      const scale = Math.min(maxW / t.size.w, maxH / t.size.h, 1);
+      asset.style.transformOrigin = 'top left';
+      asset.style.transform = `scale(${scale})`;
+      this.els.stage.style.width = `${t.size.w * scale}px`;
+      this.els.stage.style.height = `${t.size.h * scale}px`;
+    }
     this.els.hint.textContent = `${t.store} · ${t.id} · ${t.size.w}×${t.size.h} px`;
   }
 
@@ -228,16 +205,15 @@ export class Studio {
     this.selected = i;
     this.syncSettings();
     this.renderRail();
-    void this.draw();
+    this.draw();
   }
 
-  /** Push the current target's state into the settings inputs. */
   private syncSettings(): void {
     const st = this.currentState();
     this.els.capText.value = st.captionText;
     this.els.capBottom.checked = st.captionBottom;
     this.els.headSize.value = String(st.headMul);
-    this.els.clearImg.style.display = st.userImage ? '' : 'none';
+    this.els.clearImg.style.display = st.userImageUrl ? '' : 'none';
   }
 
   private renderRail(): void {
@@ -262,31 +238,49 @@ export class Studio {
     }
   }
 
-  private downloadDataUrl(dataUrl: string, name: string): void {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = name;
-    a.click();
+  /** Rasterize a target's asset DOM to a Blob at exact device px (html-to-image). */
+  private async rasterize(t: ResolvedTarget, format: 'png' | 'jpeg', quality: number): Promise<Blob> {
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none';
+    holder.innerHTML = this.assetHtml(t);
+    document.body.appendChild(holder);
+    const asset = holder.querySelector('#asset') as HTMLElement;
+    try {
+      await (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready;
+      const imgs = Array.from(holder.querySelectorAll('img')) as HTMLImageElement[];
+      await Promise.all(
+        imgs.map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? img.decode().catch(() => undefined)
+            : new Promise<void>((res) => {
+                img.addEventListener('load', () => res(), { once: true });
+                img.addEventListener('error', () => res(), { once: true });
+              }),
+        ),
+      );
+      const opts = { pixelRatio: 1, width: t.size.w, height: t.size.h, cacheBust: true, quality };
+      const blob = await toBlob(asset, format === 'jpeg' ? { ...opts, type: 'image/jpeg' } : opts);
+      if (!blob) throw new Error('rasterize produced no blob');
+      return blob;
+    } finally {
+      holder.remove();
+    }
   }
 
-  private toDataUrl(canvas: HTMLCanvasElement, t: ResolvedTarget): { url: string; ext: string } {
-    const format = t.output?.format ?? this.boot.config.output?.format ?? 'png';
-    const quality = t.output?.quality ?? this.boot.config.output?.quality ?? 0.94;
-    const url = canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', quality);
-    return { url, ext: format === 'png' ? 'png' : 'jpg' };
+  private downloadBlob(blob: Blob, name: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   private async exportOne(t: ResolvedTarget, forceFormat?: 'png' | 'jpeg'): Promise<void> {
-    const tmp = document.createElement('canvas');
-    await this.renderTo(tmp, t);
-    if (forceFormat) {
-      const quality = t.output?.quality ?? this.boot.config.output?.quality ?? 0.94;
-      const url = tmp.toDataURL(forceFormat === 'png' ? 'image/png' : 'image/jpeg', quality);
-      this.downloadDataUrl(url, `${t.store}_${t.id}.${forceFormat === 'png' ? 'png' : 'jpg'}`);
-      return;
-    }
-    const { url, ext } = this.toDataUrl(tmp, t);
-    this.downloadDataUrl(url, `${t.store}_${t.id}.${ext}`);
+    const format = forceFormat ?? t.output?.format ?? this.boot.config.output?.format ?? 'png';
+    const quality = t.output?.quality ?? this.boot.config.output?.quality ?? 0.94;
+    const blob = await this.rasterize(t, format, quality);
+    this.downloadBlob(blob, `${t.store}_${t.id}.${format === 'png' ? 'png' : 'jpg'}`);
   }
 
   private wireEvents(): void {
@@ -294,32 +288,24 @@ export class Studio {
 
     e.capText.oninput = () => {
       this.currentState().captionText = e.capText.value;
-      void this.draw();
+      this.draw();
     };
     e.capBottom.onchange = () => {
       this.currentState().captionBottom = e.capBottom.checked;
-      void this.draw();
+      this.draw();
     };
     e.headSize.oninput = () => {
       this.currentState().headMul = parseFloat(e.headSize.value);
-      void this.draw();
+      this.draw();
     };
 
     const loadFile = (file: File | undefined | null): void => {
       if (!file || !file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          createImageBitmap(img).then((bmp) => {
-            this.currentState().userImage = bmp;
-            e.clearImg.style.display = '';
-            void this.draw();
-          });
-        };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
+      const st = this.currentState();
+      if (st.userImageUrl) URL.revokeObjectURL(st.userImageUrl);
+      st.userImageUrl = URL.createObjectURL(file);
+      e.clearImg.style.display = '';
+      this.draw();
     };
 
     e.drop.ondragover = (ev) => {
@@ -337,10 +323,11 @@ export class Studio {
 
     e.clearImg.onclick = () => {
       const st = this.currentState();
-      st.userImage = undefined;
+      if (st.userImageUrl) URL.revokeObjectURL(st.userImageUrl);
+      st.userImageUrl = undefined;
       e.clearImg.style.display = 'none';
       e.file.value = '';
-      void this.draw();
+      this.draw();
     };
 
     e.fontSelect.onchange = () => {
@@ -361,16 +348,16 @@ export class Studio {
       try {
         for (const t of this.targets) {
           await this.exportOne(t);
-          // small gap so the browser doesn't drop rapid sequential downloads
           await new Promise((r) => setTimeout(r, 250));
         }
       } finally {
         e.expAll.disabled = false;
       }
     };
+
+    window.addEventListener('resize', () => this.draw());
   }
 
-  /** Boot the studio: wire UI, wait for fonts, render the first target. */
   async start(): Promise<void> {
     this.els.brandName.textContent = this.boot.config.brand.name;
     this.wireEvents();
@@ -380,18 +367,12 @@ export class Studio {
       this.els.hint.textContent = 'No targets in this config.';
       return;
     }
-    // Load the configured brand font BEFORE the first measure/render so caption
-    // metrics use the bundled face (deterministic), not a system fallback.
     await this.loadFonts();
-    // Fetch the bundled-font manifest and build the picker (loads all faces so
-    // the dropdown previews each option in its own font).
     await this.initFontPicker();
-    // Fonts must be ready before the first measure/render (caption metrics).
-    await document.fonts.ready;
-    await this.draw();
+    await (document as unknown as { fonts: { ready: Promise<unknown> } }).fonts.ready;
+    this.draw();
   }
 
-  /** Register + load FontFaces (deduped); a blocked face never wedges the studio. */
   private async loadFaces(faces: FaceSpec[]): Promise<void> {
     await Promise.all(
       faces.map(async (f) => {
@@ -403,20 +384,18 @@ export class Studio {
           document.fonts.add(ff);
           await ff.load();
         } catch {
-          this.loadedFaces.delete(key); // allow a later retry
+          this.loadedFaces.delete(key);
         }
       }),
     );
   }
 
-  /** Pre-warm the caption weights for a family (no-op if already cached). */
   private async warmWeights(family: string): Promise<void> {
     await Promise.all(
       [400, 600, 700, 800].map((w) => document.fonts.load(`${w} 16px "${family}"`).catch(() => [])),
     );
   }
 
-  /** Inject + load the CLI-provided brand font face(s), then pre-warm each weight. */
   private async loadFonts(): Promise<void> {
     const fonts = this.boot.fonts;
     if (!fonts || fonts.faces.length === 0) return;
@@ -424,26 +403,22 @@ export class Studio {
     await this.warmWeights(fonts.family || fonts.faces[0]?.family || 'Inter');
   }
 
-  /** Fetch `/fonts/manifest.json`, build the dropdown, load all faces for previews. */
   private async initFontPicker(): Promise<void> {
     try {
       const resp = await fetch('/fonts/manifest.json', { cache: 'no-store' });
       if (resp.ok) this.manifest = (await resp.json()) as ManifestFont[];
     } catch {
-      this.manifest = []; // manifest unavailable → picker still offers current + Custom
+      this.manifest = [];
     }
     const current = normalizeCurrentFont(this.manifest, this.boot.config.brand.font);
-    this.boot.config.brand.font = current; // keep the in-memory brand font canonical
+    this.boot.config.brand.font = current;
     this.buildFontSelect(current);
-    // Load every manifest face so each <option> previews in its own family.
     await this.loadFaces(manifestFaces(this.manifest));
   }
 
-  /** Build the font <option> list: (custom brand font) → manifest fonts → Custom…. */
   private buildFontSelect(current: string): void {
     const sel = this.els.fontSelect;
     sel.innerHTML = '';
-    // A non-manifest brand font (e.g. a config fontFace) gets its own leading entry.
     if (current && isCustomFamily(this.manifest, current)) this.addFontOption(current);
     for (const f of this.manifest) this.addFontOption(f.family);
     const custom = document.createElement('option');
@@ -453,7 +428,6 @@ export class Studio {
     sel.value = current;
   }
 
-  /** Append one font <option>, previewed in its own family, unless already present. */
   private addFontOption(family: string): void {
     const sel = this.els.fontSelect;
     for (const o of Array.from(sel.options)) {
@@ -463,20 +437,17 @@ export class Studio {
     opt.value = family;
     opt.textContent = family;
     opt.style.fontFamily = `"${family}"`;
-    // Keep "Custom…" last when re-inserting a freshly applied custom family.
     const customOpt = Array.from(sel.options).find((o) => o.value === CUSTOM_VALUE);
     sel.insertBefore(opt, customOpt ?? null);
   }
 
-  /** Set the in-memory brand font to `family`, ensure it's loaded, then re-render. */
   private async applyFont(family: string): Promise<void> {
     this.boot.config.brand.font = family;
     await this.loadFaces(facesForFamily(this.manifest, family));
     await this.warmWeights(family);
-    await this.draw();
+    this.draw();
   }
 
-  /** Register a user-supplied woff2 URL as a FontFace, then apply it as the brand font. */
   private async applyCustomFont(): Promise<void> {
     const family = this.els.customFamily.value.trim();
     const url = this.els.customUrl.value.trim();

@@ -2,13 +2,13 @@ import { createServer, type Server } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, dirname, extname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadConfig } from '@shotframe/config';
 import type { ResolvedStudioConfig } from '@shotframe/config';
-import type { ResolvedTarget } from '@shotframe/core';
+import type { ResolvedTarget, SourceUrlMap, HtmlPresetFn } from '@shotframe/core';
+import { renderAsset } from '@shotframe/core';
 import { FONTS } from '@shotframe/fonts';
 import { HOST_HTML } from './host.js';
-import { loadPresetSources, type PresetSourceMap } from './presets.js';
+import { loadPresetFns } from './presets.js';
 import { resolveFont, fontsDir } from './fonts.js';
 
 export interface RenderOptions {
@@ -34,7 +34,6 @@ const MIME: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
-  '.js': 'text/javascript',
   '.html': 'text/html',
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
@@ -42,10 +41,9 @@ const MIME: Record<string, string> = {
   '.otf': 'font/otf',
 };
 
-/** A face spec the page injects as a `FontFace` (url filled in once the host port is known). */
+/** A face the page injects as a `FontFace` (url filled in once the host port is known). */
 interface FaceSpec {
   family: string;
-  /** server-relative path (e.g. `/fonts/inter.woff2`) or an absolute http(s) URL. */
   path: string;
   weight: string;
   style: string;
@@ -61,28 +59,11 @@ function sourceRefs(t: ResolvedTarget, bgImage?: string): string[] {
   return refs;
 }
 
-/** Resolve the browser-target core artifact (`@shotframe/core` → dist/index.js). */
-function resolveCoreArtifact(): string {
-  // In the bundled release tarball the browser core is shipped beside this file at
-  // `./assets/core.js` (it can't be inlined — it's served verbatim at /core.js).
-  try {
-    const bundled = fileURLToPath(new URL('./assets/core.js', import.meta.url));
-    if (existsSync(bundled)) return bundled;
-  } catch {
-    /* import.meta.url not a file URL — fall through to workspace resolution */
-  }
-  // Dev / workspace: core is ESM-only (exports defines only the `import` condition),
-  // so use the ESM resolver which honours it. The artifact is a self-contained
-  // browser ESM bundle.
-  const url = import.meta.resolve('@shotframe/core');
-  return fileURLToPath(url);
-}
-
-export async function runRender(opts: RenderOptions): Promise<{ written: { file: string; w: number; h: number }[] }> {
+export async function runRender(
+  opts: RenderOptions,
+): Promise<{ written: { file: string; w: number; h: number }[] }> {
   const configPath = resolve(process.cwd(), opts.config);
-  if (!existsSync(configPath)) {
-    throw new Error(`Config not found: ${configPath}`);
-  }
+  if (!existsSync(configPath)) throw new Error(`Config not found: ${configPath}`);
   const configDir = dirname(configPath);
   const cfg: ResolvedStudioConfig = await loadConfig(configPath);
 
@@ -99,14 +80,12 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
     if (targets.length === 0) throw new Error('No matching targets');
   }
 
-  // An explicit --out is CWD-relative (what the user typed); config output.dir is
-  // resolved relative to the config file (per the plan's path-portability rule).
   const outDir = opts.out
     ? resolve(process.cwd(), opts.out)
     : resolve(configDir, cfg.output?.dir ?? 'shotframe-out');
 
-  // Map every referenced source path -> a stable served URL.
-  const sourceFiles = new Map<string, string>(); // ref string -> absolute file path
+  // Map every referenced source path -> a stable served URL path.
+  const sourceFiles = new Map<string, string>(); // ref -> absolute file path
   for (const t of targets) {
     for (const ref of sourceRefs(t, cfg.background.image)) {
       if (!sourceFiles.has(ref)) {
@@ -116,39 +95,32 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
       }
     }
   }
-  // ref -> /sources/<index> URL (avoid path-encoding issues)
   const refToUrlPath = new Map<string, string>();
   const urlPathToFile = new Map<string, string>();
-  let i = 0;
+  let si = 0;
   for (const [ref, abs] of sourceFiles) {
-    const p = `/sources/${i++}${extname(abs).toLowerCase()}`;
+    const p = `/sources/${si++}${extname(abs).toLowerCase()}`;
     refToUrlPath.set(ref, p);
     urlPathToFile.set(p, abs);
   }
 
-  const coreArtifact = resolveCoreArtifact();
-
-  // ---- font plan: serve + LOAD the brand font before render (determinism) ----
-  // Map each resolved face -> a served URL, then load all faces in the page BEFORE
-  // the render loop so measureText/wrap use the bundled woff2, not a system font.
+  // ---- font plan: serve the bundled woff2 + LOAD the brand face(s) before render ----
   const fontsRoot = fontsDir();
   const fontManifestJson = JSON.stringify(FONTS);
-  const customFonts = new Map<string, string>(); // /fonts/custom-<i>.<ext> -> absolute file
+  const customFonts = new Map<string, string>();
   const faceSpecs: FaceSpec[] = [];
   let fci = 0;
-  for (const face of resolveFont(cfg.brand).faces) {
+  const fontPlan = resolveFont(cfg.brand);
+  for (const face of fontPlan.faces) {
     if (/^https?:\/\//i.test(face.file)) {
-      // custom remote face — use the URL as-is.
       faceSpecs.push({ family: face.family, path: face.file, weight: face.weight, style: face.style });
       continue;
     }
     const bundled = join(fontsRoot, face.file);
     if (!face.file.includes('/') && !face.file.includes('\\') && existsSync(bundled)) {
-      // bundled woff2 (bare filename in the fonts dir).
       faceSpecs.push({ family: face.family, path: `/fonts/${face.file}`, weight: face.weight, style: face.style });
       continue;
     }
-    // custom local face (brand.fontFace.src) — resolve relative to the config & serve it.
     const abs = resolve(configDir, face.file);
     if (!existsSync(abs)) throw new Error(`Font file not found: ${face.file} (resolved ${abs})`);
     const p = `/fonts/custom-${fci++}${extname(abs).toLowerCase()}`;
@@ -156,23 +128,16 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
     faceSpecs.push({ family: face.family, path: p, weight: face.weight, style: face.style });
   }
 
-  // Path B presets: resolve each module to its default PresetDrawFn (serialized
-  // for the browser realm; reconstructed inside page.evaluate below).
-  const presetSources: PresetSourceMap = await loadPresetSources(cfg.presets, configDir);
+  // Path B presets: live functions, called by renderAsset in THIS (Node) realm.
+  const presets: Record<string, HtmlPresetFn> = await loadPresetFns(cfg.presets, configDir);
 
-  // ---- static host on 127.0.0.1 (ephemeral port) ----
+  // ---- static host on 127.0.0.1 (ephemeral port) — same origin as fonts+images ----
   const server: Server = createServer(async (req, res) => {
     try {
       const url = (req.url ?? '/').split('?')[0];
       if (url === '/' || url === '/host.html') {
         res.setHeader('content-type', 'text/html');
         res.end(HOST_HTML);
-        return;
-      }
-      if (url === '/core.js') {
-        const js = await readFile(coreArtifact);
-        res.setHeader('content-type', 'text/javascript');
-        res.end(js);
         return;
       }
       if (url === '/fonts/manifest.json') {
@@ -192,9 +157,8 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
         if (/^[a-z0-9._-]+\.woff2$/i.test(name)) {
           const fp = join(fontsRoot, name);
           if (existsSync(fp)) {
-            const buf = await readFile(fp);
             res.setHeader('content-type', 'font/woff2');
-            res.end(buf);
+            res.end(await readFile(fp));
             return;
           }
         }
@@ -240,14 +204,14 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
 
   const written: { file: string; w: number; h: number }[] = [];
   try {
-    const page = await browser.newPage();
+    const page = await browser.newPage({ deviceScaleFactor: 1 });
     await page.goto(`${base}/host.html`, { waitUntil: 'load' });
-    await page.waitForFunction(() => (window as unknown as { __sfReady?: boolean }).__sfReady === true, {
-      timeout: 15000,
-    });
+    await page.waitForFunction(
+      () => (window as unknown as { __sfReady?: boolean }).__sfReady === true,
+      { timeout: 15000 },
+    );
 
-    // Determinism: inject + LOAD the brand font face(s) BEFORE any render, so
-    // measureText/wrap use the bundled woff2 (identical pixels across OS).
+    // Load the brand font face(s) BEFORE any render (same origin → no CORS).
     const faces = faceSpecs.map((f) => ({
       family: f.family,
       url: f.path.startsWith('http') ? f.path : `${base}${f.path}`,
@@ -261,66 +225,56 @@ export async function runRender(opts: RenderOptions): Promise<{ written: { file:
         await ff.load();
       }
       const fam = faceList[0]?.family ?? 'Inter';
-      await Promise.all(
-        [400, 600, 700, 800].map((w) => document.fonts.load(`${w} 16px "${fam}"`)),
-      );
+      await Promise.all([400, 600, 700, 800].map((w) => document.fonts.load(`${w} 16px "${fam}"`)));
     }, faces);
-    await page.evaluate(() => document.fonts.ready);
 
     for (const t of targets) {
-      const sourceUrls: Record<string, string> = {};
+      const sources: SourceUrlMap = {};
       for (const ref of sourceRefs(t, cfg.background.image)) {
         const p = refToUrlPath.get(ref);
-        if (p) sourceUrls[ref] = `${base}${p}`;
+        if (p) sources[ref] = `${base}${p}`;
       }
       const format = t.output?.format ?? cfg.output?.format ?? 'png';
       const quality = t.output?.quality ?? cfg.output?.quality ?? 0.94;
 
-      const dataUrl: string = await page.evaluate(
-        async (args) => {
-          const { cfg, target, sourceUrls, format, quality, presetSources } = args as {
-            cfg: unknown;
-            target: { size: { w: number; h: number }; preset?: string };
-            sourceUrls: Record<string, string>;
-            format: 'png' | 'jpeg';
-            quality: number;
-            presetSources: Record<string, string>;
-          };
-          const sf = (window as unknown as { __sf: { renderTarget: (...a: unknown[]) => void } }).__sf;
-          const cache = ((window as unknown as { __imgs?: Record<string, ImageBitmap> }).__imgs ??= {});
-          const sources: Record<string, ImageBitmap> = {};
-          for (const [id, u] of Object.entries(sourceUrls)) {
-            if (!cache[id]) {
-              const resp = await fetch(u);
-              const blob = await resp.blob();
-              cache[id] = await createImageBitmap(blob);
-            }
-            sources[id] = cache[id];
-          }
-          // Reconstruct each serialized PresetDrawFn in this (browser) realm.
-          const presetCache = ((window as unknown as { __presets?: Record<string, unknown> }).__presets ??= {});
-          const presets: Record<string, unknown> = {};
-          for (const [id, src] of Object.entries(presetSources)) {
-            if (!presetCache[id]) presetCache[id] = new Function(`return (${src});`)();
-            presets[id] = presetCache[id];
-          }
-          const canvas = document.getElementById('c') as HTMLCanvasElement;
-          canvas.width = target.size.w;
-          canvas.height = target.size.h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) throw new Error('no 2d context');
-          sf.renderTarget(ctx, cfg, target, sources, presets);
-          return canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', quality);
-        },
-        { cfg: cfg as unknown, target: t, sourceUrls, format, quality, presetSources },
+      // Build the asset HTML in Node (calls live presets), inject it, screenshot #asset.
+      const assetHtml = renderAsset(cfg, t, { presets, sources, family: fontPlan.family });
+      await page.setViewportSize({ width: t.size.w, height: t.size.h });
+      await page.evaluate((html) => {
+        (document.getElementById('root') as HTMLElement).innerHTML = html;
+      }, assetHtml);
+      // Wait for fonts AND every <img> (Path A screenshots / preset photos) to
+      // finish decoding — the DOM loads them async, unlike the old pre-decoded
+      // canvas path, so a screenshot taken too early would show blank placeholders.
+      await page.evaluate(async () => {
+        const d = document as unknown as { fonts: { ready: Promise<unknown> } };
+        await d.fonts.ready;
+        const imgs = Array.from(document.querySelectorAll('#asset img')) as HTMLImageElement[];
+        await Promise.all(
+          imgs.map((img) =>
+            img.complete && img.naturalWidth > 0
+              ? img.decode().catch(() => undefined)
+              : new Promise<void>((res) => {
+                  img.addEventListener('load', () => res(), { once: true });
+                  img.addEventListener('error', () => res(), { once: true });
+                }),
+          ),
+        );
+      });
+      // CSS background-image (image backgrounds) isn't an <img>; let the network settle.
+      await page.waitForLoadState('networkidle').catch(() => undefined);
+
+      const buf = await page.locator('#asset').screenshot(
+        format === 'jpeg'
+          ? { type: 'jpeg', quality: Math.round(quality * 100) }
+          : { type: 'png' },
       );
 
       const ext = format === 'png' ? 'png' : 'jpg';
       const dir = join(outDir, t.store);
       await mkdir(dir, { recursive: true });
       const file = join(dir, `${t.id}.${ext}`);
-      const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-      await writeFile(file, Buffer.from(b64, 'base64'));
+      await writeFile(file, buf);
       written.push({ file, w: t.size.w, h: t.size.h });
     }
   } finally {

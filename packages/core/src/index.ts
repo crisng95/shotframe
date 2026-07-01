@@ -1,49 +1,27 @@
 /**
- * @shotframe/core — brand-free canvas engine.
+ * @shotframe/core — brand-free Full-DOM HTML engine.
  *
  * Public surface:
- *   - `renderTarget` — the single sync, pure compose function.
- *   - the primitive toolkit (`toolkit` + each primitive) — stable, for preset authors.
- *   - all config / engine types.
+ *   - `renderAsset` — the single pure, isomorphic compose function (HTML string).
+ *   - the HTML component kit (`ui`) — for preset authors.
+ *   - CSS string helpers + all config / engine types.
  */
-export { renderTarget } from './renderTarget.js';
-
-export {
-  DEFAULT_FONT_STACK,
-  PHONE_ASPECT,
-  toolkit,
-  rr,
-  rb,
-  rs,
-  F,
-  tx,
-  wrap,
-  wrapLines,
-  pill,
-  sbar,
-  scrBg,
-  fig,
-  withAlpha,
-} from './primitives.js';
+export { renderAsset } from './renderAsset.js';
 
 export { ui } from './ui.js';
+export { esc, style, px, withAlpha, div } from './css.js';
 
-export { drawBackground } from './background.js';
-export { drawCover } from './cover.js';
-export { wrapCap, drawCaption } from './caption.js';
-export { drawDeviceBezel, drawNotch, browserFrame } from './frame.js';
-export type { BrowserChrome } from './frame.js';
+export { backgroundLayer } from './background.js';
+export { captionMetrics, captionLayer } from './caption.js';
+export type { CaptionMetrics } from './caption.js';
+export { frameLayer } from './frame.js';
+export type { FrameGeom, RenderScreen } from './frame.js';
+export { screenBody } from './screen.js';
 
 export type {
-  Ctx,
   Corners,
   Radius,
-  SourceImage,
-  SourceImageMap,
-  FigKind,
-  ScrBgOpts,
-  PillStyle,
-  CoreToolkit,
+  SourceUrlMap,
   BrandConfig,
   BackgroundConfig,
   FrameConfig,
@@ -54,23 +32,9 @@ export type {
   ResolvedTarget,
   PresetDef,
   StudioConfig,
-  PresetDrawApi,
-  PresetDrawFn,
-  UiKit,
+  RenderAssetOptions,
+  HtmlUiKit,
+  HtmlPresetArgs,
+  HtmlPresetFn,
   IconName,
-  StatusBarStyle,
-  NavBarStyle,
-  TabItem,
-  TabBarStyle,
-  CardStyle,
-  ListRowLeading,
-  ListRowStyle,
-  ButtonStyle,
-  ChipStyle,
-  HeadingStyle,
-  ParagraphStyle,
-  ImageBoxStyle,
-  AvatarStyle,
-  ProgressBarStyle,
-  BadgeStyle,
 } from './types.js';

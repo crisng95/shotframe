@@ -9,8 +9,8 @@ config. Built to be driven by an AI agent, not hand-operated.**
 shotframe is a headless, config-driven tool. An agent writes a `shotframe.config.ts`,
 runs `shotframe render`, and gets back dimension-exact PNG/JPEG files at deterministic
 paths. No interactive setup, no per-OS surprises: the output bytes are reproducible
-because fonts are bundled and the renderer reads the canvas buffer (not a viewport
-screenshot).
+because fonts are bundled and the renderer builds each asset as HTML/CSS and
+screenshots it in a real browser at the exact device pixels.
 
 > **For AI agents:** this README is the operating contract. Everything you need to
 > author a config and run the tool is inline below — you do not need to open any
@@ -133,9 +133,10 @@ config. Use it to add the agent capability to a project that already has a confi
 ### `shotframe` (= `shotframe render`) — generate assets (default, primary entrypoint)
 
 Bare `shotframe` renders **all** targets. It is the default command, so no subcommand
-is needed. Runs every target through a Playwright-driven offscreen canvas and writes
-`<out>/<store>/<id>.<ext>`. Loads the bundled `brand.font` before rendering so text wraps
-identically everywhere. Completes and exits (no lingering process).
+is needed. Builds each target's HTML with the engine and screenshots the `#asset`
+element in headless Chromium (Playwright), writing `<out>/<store>/<id>.<ext>`. Loads the
+bundled `brand.font` before rendering so text is identical everywhere. Completes and exits
+(no lingering process).
 
 | Flag | Meaning |
 | --- | --- |
@@ -154,7 +155,7 @@ Prints every target id + size, grouped by store, so you know what to pass to `-t
 npx shotframe studio --config ./shotframe.config.ts   # serves http://127.0.0.1:5179
 ```
 
-A 3-pane UI (targets rail · live canvas · settings) for visual tweaking: edit captions,
+A 3-pane UI (targets rail · live HTML preview · settings) for visual tweaking: edit captions,
 drag-drop a real screenshot per target, pick a font, export manually. Edits are
 **in-memory only** — never written back to the config (an agent owns the config file).
 This command starts a long-lived server; **do not run it from an autonomous/headless
@@ -231,67 +232,47 @@ Target = {
 
 - **Path A — frame a real screenshot.** Set `source:` on a target; shotframe cover-fits
   the image into the chosen `frame`:
-  - `canvas` — drawn device bezel (`radius`, `island`); MIT-safe, no trademarked PNGs.
+  - `canvas` — CSS device bezel (`radius`, `island`); MIT-safe, no trademarked PNGs.
+    (The name is kept for config back-compat; the bezel + notch are now drawn in CSS.)
   - `browser` — browser chrome (traffic lights + URL bar) for Chrome Web Store; set `url`.
   - `image` — your own licensed device-frame PNG via `src`.
   - `none` — bare image (feature graphic, email, promo).
 - **Path B — synthetic preset (no screenshot).** Register `presets: [{ id, module }]` and
-  set `preset:` on a target. The module default-exports a `PresetDrawFn` that draws using
-  ONLY the injected api — size + scale (`w`, `h`, `S`, `aspect`, `isWide`), brand
-  (`brand`, `tokens`, `font`), the low-level toolkit (`prim`) and the high-level kit (`ui`).
-  It must be self-contained (it is serialized into the render realm; no module-scope
-  imports/state).
+  set `preset:` on a target. The module default-exports an `HtmlPresetFn` — `(args) => string`
+  returning the screen's inner **HTML**. It uses ONLY its injected api: the screen size
+  (`w`, `h`), brand (`brand`, `tokens`, `font`), the image URL map (`assets`) and the HTML
+  component kit (`ui`). It must be self-contained (it may be serialized into the studio
+  realm; no module-scope imports/state — type-only imports are erased).
 
 ```ts
-import type { PresetDrawFn } from '@shotframe/core';
-const hero: PresetDrawFn = (ctx, { w, h, S, brand, tokens, prim, font }) => {
-  prim.scrBg(ctx, 0, 0, w, h, { bg: [tokens.bg, '#070b16'], glow: tokens.accent, radial: true });
-  // Type sized by S (the phone-scale unit); position uses w/h so it fills the frame.
-  prim.tx(ctx, brand.name, w * 0.09, h * 0.18, S * 0.085, 800, tokens.caption, 'left', font);
-};
+import type { HtmlPresetFn } from '@shotframe/core';
+const hero: HtmlPresetFn = ({ w, h, brand, tokens, font, ui }) => `
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,${tokens.bg},#070b16);
+              color:${tokens.caption};font-family:'${font}',sans-serif">
+    ${ui.statusBar({ color: tokens.caption })}
+    <div style="position:absolute;left:${w * 0.09}px;top:${h * 0.18}px;
+                font-size:${w * 0.09}px;font-weight:800">${ui.esc(brand.name)}</div>
+  </div>`;
 export default hero;
 ```
 
-### Filling wide targets (tablet / iPad)
-
-The same preset feeds a phone (aspect ≈ 0.46) and an iPad (aspect ≈ 0.75). If you size
-everything off `w`, wide targets balloon; if you cap everything, they collapse into a
-squeezed center column. To avoid both, a preset receives a **phone-scale unit** alongside
-`w`/`h`:
-
-| field | value | use for |
-| --- | --- | --- |
-| `S` | `min(w, h * PHONE_ASPECT)` — "how wide a phone of this height would be" | **type, radii, strokes, circles** |
-| `w`, `h` | the actual screen rect | **positions, container widths/heights** |
-| `aspect` | `w / h` | branching on shape |
-| `isWide` | `aspect > PHONE_ASPECT` | `true` on tablet/iPad |
-
-The rule: **size by `S`, position by `w`/`h`.** On a phone `S === w`, so nothing changes;
-on a tablet/iPad `S < w`, so text and round shapes stay proportionate while cards, rails and
-bars still stretch edge-to-edge and fill the frame.
-
-```ts
-const screen: PresetDrawFn = (ctx, { w, h, S, tokens, prim, font }) => {
-  prim.rb(ctx, w * 0.06, h * 0.1, w * 0.88, h * 0.2, S * 0.05, tokens.surface); // card fills width
-  prim.tx(ctx, 'Your score', w * 0.09, h * 0.16, S * 0.05, 700, tokens.text, 'left', font); // type bounded by S
-};
-```
-
-`PHONE_ASPECT` (default `0.58`) is exported from `@shotframe/core` if you need the exact
-threshold; on phone-only sets you can ignore `S` entirely and just use `w`/`h`.
+Layout with normal CSS — flexbox, `position:absolute`, `px` units against `w`/`h`. Use real
+`<img src="${assets.ref}">` photos, inline SVG icons and `box-shadow`/`backdrop-filter` for
+depth: that is what makes a preset look like a real screenshot instead of a flat redraw. The
+same preset feeds a phone AND a tablet/iPad — because it is real HTML, cap large type with
+`clamp()`/relative sizing (or branch on `w`/`h`) so wide targets don't balloon.
 
 ## Agent mode — redraw screens from your project
 
 An AI coding agent working inside your repo can generate the whole set **without any
 screenshots**: it reads the project, extracts the brand + key screens, and **redraws**
-them as Path B presets using a high-level UI kit injected as `api.ui` (`statusBar`,
-`navBar`, `tabBar`, `card`, `listRow`, `button`, `chip`, `heading`, `imageBox`, `avatar`,
-`progressBar`, `iconGlyph`, …). No imports needed inside a preset — the kit is injected, so
-presets stay serialization-safe.
+them as Path B HTML presets, optionally using the HTML component kit injected as `ui`
+(`ui.statusBar`, `ui.icon`, `ui.card`, `ui.button`, `ui.chip`, `ui.tabBar`, plus `ui.esc`
+and `ui.withAlpha`). Presets return plain HTML strings, so they stay serialization-safe.
 
 The playbook is [`AGENTS.md`](./AGENTS.md); the canonical worked example is
 [`examples/basic/presets/appdemo.ts`](./examples/basic/presets/appdemo.ts) (a full app home
-screen drawn entirely with `api.ui`). Point your agent at `AGENTS.md` and it produces
+screen built entirely in HTML with `ui`). Point your agent at `AGENTS.md` and it produces
 `presets/*.ts` + a config, then runs `shotframe`.
 
 **It's automatic in-project:** `shotframe init` (or `shotframe skill`) drops the same
@@ -313,9 +294,9 @@ Custom family: point `brand.fontFace: { family, src }` at your own woff2 (path o
 ## Outputs
 
 - One file per target at `<out>/<store>/<id>.<ext>` (`ext` from the resolved output format).
-- Each file is the target's **exact** `size` in pixels — guaranteed, because the renderer
-  reads `canvas.toDataURL`/`toBlob` rather than screenshotting a viewport. Verify with
-  `sips -g pixelWidth -g pixelHeight <file>` or `sharp`.
+- Each file is the target's **exact** `size` in pixels — guaranteed, because the asset is
+  authored at exact device px and the renderer screenshots that `#asset` element (not a
+  viewport). Verify with `sips -g pixelWidth -g pixelHeight <file>` or `sharp`.
 - Re-running with unchanged inputs reproduces the same bytes on the same platform; across
   platforms, dimensions are identical and pixels match within AA/emoji tolerance (fonts are
   bundled, so text metrics do not drift).
@@ -333,19 +314,20 @@ Custom family: point `brand.fontFace: { family, src }` at your own woff2 (path o
 
 ## How it works
 
-`@shotframe/core` exposes one sync, pure function
-`renderTarget(ctx, config, target, sources, presets)` composing
-**background → frame → cover(source) | preset → caption** onto a 2D context. Both the
-studio (`<canvas>`) and `render` (a Playwright offscreen `<canvas>`) call the **same**
-engine and read the canvas buffer — output is dimension-exact and preview == file on the
-same platform. The shell loads the bundled `brand.font` before the first `renderTarget`,
-so text metrics (and bytes) are the same on every OS.
+`@shotframe/core` exposes one pure, isomorphic function
+`renderAsset(config, target, opts): string` composing
+**background → frame → screen(source `<img>` | HTML preset) → caption** into a single
+`#asset` HTML string sized at exact device pixels. Both the studio (mounts it as live DOM)
+and `render` (Playwright sets it and screenshots the `#asset` element) call the **same**
+engine — so the studio preview is a WYSIWYG of the file, and download is a reflow of what
+you see. The shell loads the bundled `brand.font` before the first render, so text (and
+bytes) are the same on every OS.
 
 ## Packages
 
 | Package | What it is | Published |
 | --- | --- | --- |
-| [`@shotframe/core`](./packages/core) | Brand-free canvas engine + stable primitive toolkit. Zero runtime deps, browser-target. | ✅ |
+| [`@shotframe/core`](./packages/core) | Brand-free Full-DOM HTML engine (`renderAsset`). Zero runtime deps, isomorphic (Node + browser). | ✅ |
 | [`@shotframe/config`](./packages/config) | Zod schema, `defineConfig`, jiti config loader, built-in store packs. | ✅ |
 | [`@shotframe/cli`](./packages/cli) | `shotframe render` / `shotframe studio`. Bundles the studio UI. | ✅ |
 | [`@shotframe/fonts`](./packages/fonts) | Bundled OFL webfonts (woff2) + manifest for cross-OS determinism. | ✅ |

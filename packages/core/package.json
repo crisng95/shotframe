@@ -1,9 +1,9 @@
 {
   "name": "@shotframe/core",
   "version": "0.1.0",
-  "description": "Brand-free canvas engine for shotframe: a sync, pure renderTarget compose function plus a stable primitive toolkit.",
+  "description": "Brand-free Full-DOM HTML engine for shotframe: a pure, isomorphic renderAsset() that composes one store asset as an HTML string.",
   "keywords": [
-    "canvas",
+    "html",
     "screenshots",
     "app-store",
     "google-play",

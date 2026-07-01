@@ -1,21 +1,18 @@
 /**
- * The headless render surface. A minimal page that imports the SAME browser-target
- * `@shotframe/core` artifact the studio uses (served at `/core.js`) and exposes
- * `renderTarget` on `window.__sf`. Playwright drives an offscreen `<canvas>` here and
- * reads the pixel buffer back — dimension-exact, not a viewport screenshot.
+ * The headless render surface. A minimal SAME-ORIGIN page served by the render
+ * host so brand fonts and source images (fetched from the same server) are not
+ * blocked by CORS. Playwright navigates here, loads the brand FontFace(s), sets
+ * `#root` to the asset HTML built by `@shotframe/core.renderAsset`, and screenshots
+ * the `#asset` element — dimension-exact (the asset is authored at device px).
  */
 export const HOST_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<style>html,body{margin:0;background:#000} canvas{display:block}</style>
+<style>html,body{margin:0;padding:0;background:#000}</style>
 </head>
 <body>
-<canvas id="c" width="1" height="1"></canvas>
-<script type="module">
-  import { renderTarget } from '/core.js';
-  window.__sf = { renderTarget };
-  window.__sfReady = true;
-</script>
+<div id="root"></div>
+<script>window.__sfReady = true;</script>
 </body>
 </html>`;

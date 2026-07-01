@@ -39,16 +39,19 @@ user to install it — see the repo README).
    \`app.json\`. Map to \`brand.colors\`: \`primary\`, \`accent\`, \`bg\`, \`caption\`, plus
    \`surface\`/\`muted\` as needed. Choose a bundled \`brand.font\` (Inter, Montserrat, Poppins,
    'Plus Jakarta Sans', 'DM Sans', 'Space Grotesk', Sora) matching the brand tone.
-3. **Redraw each screen as a preset.** For each chosen screen write \`presets/<name>.ts\`:
+3. **Redraw each screen as an HTML preset.** For each chosen screen write \`presets/<name>.ts\`
+   that returns the screen's **HTML string** (rendered by a real browser, then rasterized):
    \`\`\`ts
-   import type { PresetDrawFn } from '@shotframe/core';
-   const screen: PresetDrawFn = (ctx, { w, h, S, brand, tokens, prim, font, ui }) => { /* draw */ };
+   import type { HtmlPresetFn } from '@shotframe/core';
+   const screen: HtmlPresetFn = ({ w, h, brand, tokens, font, assets, ui }) =>
+     \\\`<div style="position:absolute;inset:0;background:\\\${tokens.bg}">…</div>\\\`;
    export default screen;
    \`\`\`
    Reconstruct the real screen (same nav bar / list / cards / hero, real-ish labels, brand
-   colors) using \`api.ui\`. **The body MUST be self-contained** — no imports, no closures,
-   no module-scope vars (it is serialized and rebuilt in the render realm; the \`import type\`
-   line is erased). Take colors from \`tokens\`/\`brand.colors\`.
+   colors) with plain HTML/CSS + \`ui\` helpers. Use real \`<img>\` from \`assets\` for photos and
+   inline SVG for icons — this is what makes it look real. **The body MUST be self-contained** —
+   no imports, no closures, no module-scope vars (it may be serialized and rebuilt in the studio
+   realm; the \`import type\` line is erased). Take colors from \`tokens\`/\`brand.colors\`.
 4. **Caption each screen** with one short marketing headline (drawn above the device).
 5. **Config + render.** Write/extend \`shotframe.config.ts\`: \`brand\`, a gradient
    \`background\`, \`presets: [{ id, module }]\`, and one \`target\` per screen per store
@@ -57,36 +60,24 @@ user to install it — see the repo README).
    right. \`shotframe -t <id>\` re-renders one; \`shotframe list\` shows targets.
 
 ## \`api\` a preset receives
-\`(ctx, { w, h, S, aspect, isWide, brand, tokens, prim, font, ui })\` — \`tokens\` = brand.colors by name;
-\`prim\` = low-level (rr rb rs F tx wrap wrapLines pill sbar scrBg fig withAlpha);
-\`font\` = resolved family (pass to every text component); \`ui\` = high-level components (prefer these):
+\`({ w, h, brand, tokens, font, assets, ui })\` — \`w\`/\`h\` = the screen (inner) px to fill;
+\`tokens\` = brand.colors by name; \`font\` = resolved family; \`assets\` = { ref: url } for real
+images you referenced; \`ui\` = HTML component helpers (each returns an HTML string):
 
 \`\`\`
-statusBar(g,x,y,w,{color,time?,family})
-navBar(g,x,y,w,{title,color,align?,bg?,leading?,trailing?,family}) -> height
-tabBar(g,x,y,w,h,{items:[{label,icon,active?}],color,activeColor,bg,family})
-card(g,x,y,w,h,{fill,radius?,stroke?,shadow?})
-listRow(g,x,y,w,h,{title,subtitle?,leading?:{fill,initials?,icon?,color?},trailing?,colors:{title,subtitle,trailing},divider?,family})
-button(g,x,y,w,h,{label,fill,color,radius?,family})
-chip(g,x,y,{label,fill,color,h?,family}) -> width
-heading(g,x,y,{text,size,weight?,color,maxW?,family}) -> y-below
-paragraph(g,x,y,{text,size,color,maxW,lineH?,family}) -> y-below
-imageBox(g,x,y,w,h,{fill,radius?,icon?,iconColor?})
-avatar(g,cx,cy,r,{fill,initials?,color?})
-progressBar(g,x,y,w,{value,track,fill,h?})
-badge(g,x,y,{label,fill,color,family})
-iconGlyph(g,cx,cy,r,name,color)   name in chevron|plus|check|search|heart|star|bell|home
+ui.esc(s) / ui.withAlpha(hex,a)
+ui.statusBar({color,time?})                                   iOS time + signal row
+ui.icon(name,size,color)   name in chevron|plus|check|search|heart|star|bell|home
+ui.card(innerHtml,{fill,radius?,pad?,stroke?,shadow?})
+ui.button(label,{fill,color,radius?,pad?,fontPx?})
+ui.chip(label,{fill,color,fontPx?,padX?,h?})
+ui.tabBar([{label,icon?,active?}],{color,activeColor,bg,h})   absolute bottom bar
 \`\`\`
+Layout with normal CSS (\`position:absolute\`, flexbox, \`px\` units against \`w\`/\`h\`). Prefer
+real \`<img src="\${assets.ref}">\` photos + inline SVG icons + \`box-shadow\`/\`backdrop-filter\`
+for depth — that is what separates a real-looking screen from a flat redraw.
 Store sizes: App Store 1290×2796 (iPhone), 2064×2752 (iPad); Play 1080×1920 (phone),
 1600×2560 (tablet), 1024×500 (feature graphic); Chrome 1280×800. A target per screen per store.
-
-## Filling wide targets (tablet / iPad)
-The same preset draws a phone AND a tablet/iPad. To avoid ballooning OR a squeezed center
-column, **size type/radii/strokes/circles by \`S\`** (the phone-scale unit \`min(w, h*0.58)\`)
-and **position + size containers by \`w\`/\`h\`**. On phones \`S === w\` (nothing changes); on
-tablet/iPad \`S < w\`, so text/round shapes stay proportionate while cards/rails/bars still
-stretch edge-to-edge. \`aspect\` = w/h and \`isWide\` = aspect > 0.58 (true on tablet/iPad) are
-there if you need to branch. Phone-only set? Ignore \`S\` and just use \`w\`/\`h\`.
 
 ## Good store screens
 Show the payoff (not navigation); one idea per screen echoed by the caption; use the app's

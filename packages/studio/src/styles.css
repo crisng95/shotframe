@@ -97,9 +97,9 @@ h3 {
   height: 100vh;
   overflow: auto;
 }
-canvas#c {
-  max-height: 78vh;
-  max-width: 52vw;
+#c {
+  position: relative;
+  overflow: hidden;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, .55);
   background: #0a0f1c;

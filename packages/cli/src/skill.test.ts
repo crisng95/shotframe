@@ -17,7 +17,7 @@ describe('runSkill', () => {
       expect(text.startsWith('---\n')).toBe(true);
       expect(text).toContain('name: shotframe');
       expect(text).toContain('description:');
-      expect(text).toContain('api.ui'); // the kit reference is present
+      expect(text).toContain('ui.statusBar'); // the HTML component kit reference is present
       // refuses to overwrite without force
       await expect(runSkill({})).rejects.toThrow(/already exists/);
       await expect(runSkill({ force: true })).resolves.toBeTruthy();
@@ -27,7 +27,7 @@ describe('runSkill', () => {
   });
 
   it('SKILL_MD documents the procedure + is self-contained', () => {
-    expect(SKILL_MD).toContain('PresetDrawFn');
+    expect(SKILL_MD).toContain('HtmlPresetFn');
     expect(SKILL_MD).toContain('self-contained');
     expect(SKILL_MD).toContain('statusBar');
   });
