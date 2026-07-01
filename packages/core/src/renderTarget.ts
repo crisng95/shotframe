@@ -20,6 +20,7 @@ import type {
   FrameConfig,
 } from './types.js';
 import { rr, rb, toolkit, DEFAULT_FAMILY } from './primitives.js';
+import { ui } from './ui.js';
 import { drawBackground } from './background.js';
 import { drawDeviceBezel, drawNotch, browserFrame, type BrowserChrome } from './frame.js';
 import { drawCover } from './cover.js';
@@ -65,7 +66,7 @@ function drawScreenBody(
     rr(ctx, x, y, w, h, r);
     ctx.clip();
     ctx.translate(x, y);
-    preset(ctx, { w, h, brand, tokens: brand.colors, prim: toolkit, font: family });
+    preset(ctx, { w, h, brand, tokens: brand.colors, prim: toolkit, font: family, ui });
     ctx.restore();
     return;
   }

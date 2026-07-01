@@ -34,7 +34,10 @@ export default defineConfig({
   output: { dir: './out' },
   // Path B: register synthetic-screen presets. The CLI/studio resolve each
   // `module` (relative to this config file) to its default-exported PresetDrawFn.
-  presets: [{ id: 'hero', module: './presets/hero.ts' }],
+  presets: [
+    { id: 'hero', module: './presets/hero.ts' },
+    { id: 'appdemo', module: './presets/appdemo.ts' },
+  ],
   targets: [
     // ── App Store: a store needs MANY screenshots — each one is its own target
     //    with the same `store`, so the studio rail groups them under "App Store".
@@ -71,6 +74,16 @@ export default defineConfig({
       frame: { type: 'canvas', radius: 0.092, island: 'island' },
       caption: { text: 'No screenshot needed', position: 'top' },
       preset: 'hero',
+    },
+    // App Store — Path B: a believable app HOME screen redrawn ENTIRELY with the
+    // injected high-level UI kit (`api.ui`), no real screenshot.
+    {
+      store: 'appstore',
+      id: 'appdemo',
+      size: { w: 1290, h: 2796 },
+      frame: { type: 'canvas', radius: 0.092, island: 'island' },
+      caption: { text: 'Redrawn with the UI kit', position: 'top' },
+      preset: 'appdemo',
     },
     // App Store — iPad 13" (different size + flatter corners, no island)
     {

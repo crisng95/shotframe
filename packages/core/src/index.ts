@@ -25,6 +25,8 @@ export {
   withAlpha,
 } from './primitives.js';
 
+export { ui } from './ui.js';
+
 export { drawBackground } from './background.js';
 export { drawCover } from './cover.js';
 export { wrapCap, drawCaption } from './caption.js';
@@ -53,4 +55,21 @@ export type {
   StudioConfig,
   PresetDrawApi,
   PresetDrawFn,
+  UiKit,
+  IconName,
+  StatusBarStyle,
+  NavBarStyle,
+  TabItem,
+  TabBarStyle,
+  CardStyle,
+  ListRowLeading,
+  ListRowStyle,
+  ButtonStyle,
+  ChipStyle,
+  HeadingStyle,
+  ParagraphStyle,
+  ImageBoxStyle,
+  AvatarStyle,
+  ProgressBarStyle,
+  BadgeStyle,
 } from './types.js';
