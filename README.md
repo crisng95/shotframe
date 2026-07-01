@@ -25,7 +25,8 @@ screenshot).
 ```
 INPUT   a shotframe.config.{ts,js,mjs,json}  (schema below) in the project root,
         + the real screenshot images it references (source: paths)
-RUN     cd <project> && npx shotframe          # gen ALL targets (config auto-detected)
+RUN     cd <project> && npx shotframe init      # scaffold a config + sample screenshot
+        npx shotframe                          # gen ALL targets (config auto-detected)
         npx shotframe -t <id> [<id>...]        # regenerate only these variants
         npx shotframe -s <store>               # regenerate only one store
         npx shotframe list                     # show every target id + size
@@ -59,7 +60,7 @@ shotframe is **not on the npm registry**. Install the self-contained tarball fro
 token:
 
 ```bash
-npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.0/shotframe-0.1.0.tgz
+npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.1/shotframe-0.1.1.tgz
 npx playwright install chromium     # one-time, for `render`
 ```
 
@@ -115,6 +116,12 @@ npx shotframe list                  # what target ids exist?
 ```
 
 ## Commands
+
+### `shotframe init` — scaffold a starter project
+
+Writes a `shotframe.config.ts` (or `--json`) plus a placeholder `shots/sample.png`, so
+`shotframe` renders something immediately. Replace the sample with your real screenshots
+and edit the config. `--force` overwrites; refuses to clobber an existing config otherwise.
 
 ### `shotframe` (= `shotframe render`) — generate assets (default, primary entrypoint)
 

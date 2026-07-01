@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
 import { Command } from 'commander';
 import { detectConfig } from './detect.js';
 import { runRender, listTargets } from './render.js';
 import { runStudio } from './studio.js';
+import { runInit } from './init.js';
 
 // Read the real version from package.json (one level up from dist/). Works in dev and
 // when published (npm always ships package.json), so `--version` never drifts.
@@ -49,6 +51,29 @@ program
       for (const w of written) console.log(`  ${w.w}×${w.h}  ${w.file}`);
     } catch (err) {
       console.error(`✖ render failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  });
+
+// `init` — scaffold a starter config + a sample screenshot, so `shotframe` runs
+// immediately after install (the "cd in, one command" onboarding path).
+program
+  .command('init')
+  .description('Scaffold shotframe.config + a sample screenshot in this folder')
+  .option('--json', 'write shotframe.config.json instead of .ts')
+  .option('-f, --force', 'overwrite existing files')
+  .action(async (opts: { json?: boolean; force?: boolean }) => {
+    try {
+      const { config, sample } = await runInit({ json: opts.json, force: opts.force });
+      const rel = (p: string) => relative(process.cwd(), p) || p;
+      console.log(`✓ Created ${rel(config)}`);
+      console.log(`✓ Created ${rel(sample)} (a placeholder — replace with your real screenshots)`);
+      console.log('\nNext:');
+      console.log('  1. shotframe            # render now (uses the sample)');
+      console.log('  2. drop real screenshots into ./shots/ and edit the config');
+      console.log('  3. shotframe studio     # tweak captions/fonts visually');
+    } catch (err) {
+      console.error(`✖ init failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
   });
