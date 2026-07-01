@@ -20,11 +20,8 @@
   "homepage": "https://github.com/crisng95/shotframe#readme",
   "bugs": "https://github.com/crisng95/shotframe/issues",
   "type": "module",
+  "private": true,
   "sideEffects": false,
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "files": [
     "dist"
   ],

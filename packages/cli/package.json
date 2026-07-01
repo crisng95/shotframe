@@ -23,16 +23,13 @@
   "homepage": "https://github.com/crisng95/shotframe#readme",
   "bugs": "https://github.com/crisng95/shotframe/issues",
   "type": "module",
+  "private": true,
   "bin": {
     "shotframe": "./dist/index.js"
   },
   "files": [
     "dist"
   ],
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "scripts": {
     "build": "tsup && node ./scripts/copy-studio.mjs",
     "typecheck": "tsc --noEmit",
