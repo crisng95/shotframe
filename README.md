@@ -60,7 +60,7 @@ shotframe is **not on the npm registry**. Install the self-contained tarball fro
 token:
 
 ```bash
-npm i -g https://github.com/crisng95/shotframe/releases/download/v0.1.2/shotframe-0.1.2.tgz
+npm i -g https://github.com/crisng95/shotframe/releases/download/v0.2.0/shotframe-0.2.0.tgz
 npx playwright install chromium     # one-time, for `render`
 ```
 
@@ -241,6 +241,20 @@ const hero: PresetDrawFn = (ctx, { w, h, brand, tokens, prim, font }) => {
 };
 export default hero;
 ```
+
+## Agent mode — redraw screens from your project
+
+An AI coding agent working inside your repo can generate the whole set **without any
+screenshots**: it reads the project, extracts the brand + key screens, and **redraws**
+them as Path B presets using a high-level UI kit injected as `api.ui` (`statusBar`,
+`navBar`, `tabBar`, `card`, `listRow`, `button`, `chip`, `heading`, `imageBox`, `avatar`,
+`progressBar`, `iconGlyph`, …). No imports needed inside a preset — the kit is injected, so
+presets stay serialization-safe.
+
+The playbook is [`AGENTS.md`](./AGENTS.md); the canonical worked example is
+[`examples/basic/presets/appdemo.ts`](./examples/basic/presets/appdemo.ts) (a full app home
+screen drawn entirely with `api.ui`). Point your agent at `AGENTS.md` and it produces
+`presets/*.ts` + a config, then runs `shotframe`.
 
 ## Fonts
 
