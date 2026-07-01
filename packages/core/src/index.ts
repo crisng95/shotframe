@@ -10,6 +10,7 @@ export { renderTarget } from './renderTarget.js';
 
 export {
   DEFAULT_FONT_STACK,
+  PHONE_ASPECT,
   toolkit,
   rr,
   rb,

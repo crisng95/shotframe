@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderTarget } from './renderTarget.js';
-import type { StudioConfig, ResolvedTarget } from './types.js';
+import { PHONE_ASPECT } from './primitives.js';
+import type { StudioConfig, ResolvedTarget, PresetDrawApi } from './types.js';
 
 /**
  * Fake 2D context rich enough for renderTarget. It records the `font` string in
@@ -76,5 +77,43 @@ describe('renderTarget font wiring', () => {
     expect(fontsUsed.some((f) => f.includes('Inter'))).toBe(true);
     // must NOT silently use the system-only stack for caption text
     expect(fontsUsed.every((f) => !f.includes('-apple-system'))).toBe(true);
+  });
+});
+
+describe('renderTarget scale unit (S / aspect / isWide)', () => {
+  /** Render a bare (frame:none, no caption) target of the given size and capture the preset api. */
+  function captureApi(w: number, h: number): PresetDrawApi {
+    const { ctx } = makeCtx();
+    let seen: PresetDrawApi | undefined;
+    const t: ResolvedTarget = {
+      store: 'appstore',
+      id: 'cap',
+      size: { w, h },
+      frame: { type: 'none' },
+      preset: 'cap',
+    };
+    renderTarget(ctx, cfg(), t, {}, { cap: (_g, api) => { seen = api; } });
+    if (!seen) throw new Error('preset was not invoked');
+    return seen;
+  }
+
+  it('is internally consistent: S = min(w, h*PHONE_ASPECT), isWide = aspect > PHONE_ASPECT', () => {
+    const api = captureApi(1290, 2796);
+    expect(api.aspect).toBeCloseTo(api.w / api.h, 10);
+    expect(api.S).toBeCloseTo(Math.min(api.w, api.h * PHONE_ASPECT), 6);
+    expect(api.isWide).toBe(api.aspect > PHONE_ASPECT);
+  });
+
+  it('phone target: S === w and not wide', () => {
+    const api = captureApi(1290, 2796); // aspect ~0.46 < 0.58
+    expect(api.isWide).toBe(false);
+    expect(api.S).toBeCloseTo(api.w, 6);
+  });
+
+  it('tablet target: S === h*PHONE_ASPECT, S < w, and wide', () => {
+    const api = captureApi(1600, 2560); // aspect 0.625 > 0.58
+    expect(api.isWide).toBe(true);
+    expect(api.S).toBeCloseTo(api.h * PHONE_ASPECT, 6);
+    expect(api.S).toBeLessThan(api.w);
   });
 });

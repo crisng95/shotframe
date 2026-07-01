@@ -79,6 +79,11 @@ right. Use `shotframe list` to see targets and `shotframe -t <id>` to re-render 
 ```
 (ctx, api) where api = {
   w, h,          // screen size (origin is already at the screen's top-left)
+  S,             // phone-scale unit = min(w, h*0.58). Size TYPE/radii/strokes/circles by S
+                 //   (so tablet/iPad don't balloon); keep POSITIONS + container widths on w/h
+                 //   so they fill the frame. On phones S === w (unchanged).
+  aspect,        // w / h
+  isWide,        // aspect > 0.58 — true for tablet / iPad targets
   brand,         // the BrandConfig
   tokens,        // brand.colors by name (tokens.primary, tokens.accent, tokens.bg, …)
   prim,          // low-level toolkit: rr rb rs F tx wrap wrapLines pill sbar scrBg fig withAlpha

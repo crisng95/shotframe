@@ -237,17 +237,48 @@ Target = {
   - `none` — bare image (feature graphic, email, promo).
 - **Path B — synthetic preset (no screenshot).** Register `presets: [{ id, module }]` and
   set `preset:` on a target. The module default-exports a `PresetDrawFn` that draws using
-  ONLY the injected toolkit (`prim`, `brand`, `tokens`, `font`) — it must be
-  self-contained (it is serialized into the render realm; no module-scope imports/state).
+  ONLY the injected api — size + scale (`w`, `h`, `S`, `aspect`, `isWide`), brand
+  (`brand`, `tokens`, `font`), the low-level toolkit (`prim`) and the high-level kit (`ui`).
+  It must be self-contained (it is serialized into the render realm; no module-scope
+  imports/state).
 
 ```ts
 import type { PresetDrawFn } from '@shotframe/core';
-const hero: PresetDrawFn = (ctx, { w, h, brand, tokens, prim, font }) => {
+const hero: PresetDrawFn = (ctx, { w, h, S, brand, tokens, prim, font }) => {
   prim.scrBg(ctx, 0, 0, w, h, { bg: [tokens.bg, '#070b16'], glow: tokens.accent, radial: true });
-  prim.tx(ctx, brand.name, w * 0.09, h * 0.18, w * 0.085, 800, tokens.caption, 'left', font);
+  // Type sized by S (the phone-scale unit); position uses w/h so it fills the frame.
+  prim.tx(ctx, brand.name, w * 0.09, h * 0.18, S * 0.085, 800, tokens.caption, 'left', font);
 };
 export default hero;
 ```
+
+### Filling wide targets (tablet / iPad)
+
+The same preset feeds a phone (aspect ≈ 0.46) and an iPad (aspect ≈ 0.75). If you size
+everything off `w`, wide targets balloon; if you cap everything, they collapse into a
+squeezed center column. To avoid both, a preset receives a **phone-scale unit** alongside
+`w`/`h`:
+
+| field | value | use for |
+| --- | --- | --- |
+| `S` | `min(w, h * PHONE_ASPECT)` — "how wide a phone of this height would be" | **type, radii, strokes, circles** |
+| `w`, `h` | the actual screen rect | **positions, container widths/heights** |
+| `aspect` | `w / h` | branching on shape |
+| `isWide` | `aspect > PHONE_ASPECT` | `true` on tablet/iPad |
+
+The rule: **size by `S`, position by `w`/`h`.** On a phone `S === w`, so nothing changes;
+on a tablet/iPad `S < w`, so text and round shapes stay proportionate while cards, rails and
+bars still stretch edge-to-edge and fill the frame.
+
+```ts
+const screen: PresetDrawFn = (ctx, { w, h, S, tokens, prim, font }) => {
+  prim.rb(ctx, w * 0.06, h * 0.1, w * 0.88, h * 0.2, S * 0.05, tokens.surface); // card fills width
+  prim.tx(ctx, 'Your score', w * 0.09, h * 0.16, S * 0.05, 700, tokens.text, 'left', font); // type bounded by S
+};
+```
+
+`PHONE_ASPECT` (default `0.58`) is exported from `@shotframe/core` if you need the exact
+threshold; on phone-only sets you can ignore `S` entirely and just use `w`/`h`.
 
 ## Agent mode — redraw screens from your project
 
